@@ -130,26 +130,22 @@ Evita el uso de delay() y permite ejecución paralela de tareas.
 | Publica evento     |
 +--------------------+
 
-Instrucciones de Uso
+## Publicación en MQTT
 
-Conectar el ESP32 y periféricos: LCD, LED RGB, Buzzer, Sensor y MicroSD.
+- **Broker:** `test.mosquitto.org`  
+- **Tópico:** `20217977_Andres_Arce`  
+- Cada cambio de estado del sensor se publica como un mensaje JSON.  
+- Reconexión automática si se pierde la conexión.
 
-Abrir el código en Arduino IDE y cargarlo en el ESP32.
+---
 
-Observar la salida en LCD y Serial Monitor.
+## Gestión de Tareas
 
-Revisar archivos .json en la MicroSD para consultar los registros diarios.
+- Se utiliza `millis()` para alternar entre la lectura del sensor y la actualización de la LCD.  
+- Esto evita el uso de `delay()` y permite la ejecución paralela de tareas sin bloquear el sistema.
 
-(Opcional) Abrir MQTT Explorer y suscribirse al tópico 20217977_Andres_Arce para monitoreo remoto.
+---
 
-Conclusión
+## Diagrama de Flujo del Datalogger
 
-El proyecto cumple con todos los requisitos académicos del trabajo del datalogger:
 
-Lectura y registro de eventos de un sensor táctil real.
-
-Control de actuadores visuales y acústicos.
-
-Registro en SD y transmisión en MQTT.
-
-Tareas gestionadas de manera eficiente sin bloqueos.
