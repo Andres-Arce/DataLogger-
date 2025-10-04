@@ -82,22 +82,7 @@ El proyecto está pensado para **uso académico y simulación en Wokwi**, y sirv
        "buzzer": "Activado"
    }
 
-Publicación en MQTT
-
-Broker: test.mosquitto.org
-
-Tópico: 20217977_Andres_Arce
-
-Cada cambio de estado se publica como mensaje JSON.
-
-Reconexión automática si se pierde la conexión.
-
-Gestión de Tareas
-
-millis() se utiliza para alternar lectura del sensor y actualización de LCD.
-
-Evita el uso de delay() y permite ejecución paralela de tareas.
-
+## Diagrama de Flujo del Datalogger
 
 [Sensor táctil XS-123] 
         ↓
