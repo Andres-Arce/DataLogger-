@@ -146,6 +146,6 @@ Evita el uso de delay() y permite ejecución paralela de tareas.
 
 ---
 
-## Diagrama de Flujo del Datalogger
+r
 
 
