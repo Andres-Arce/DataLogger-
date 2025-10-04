@@ -2,49 +2,50 @@
 
 ## Descripción del Proyecto
 
-Este proyecto consiste en un **datalogger IoT** desarrollado con un **ESP32**, diseñado para registrar y monitorear en tiempo real los eventos de un sensor táctil (XS-123). El sistema integra:
+Este proyecto consiste en un **datalogger IoT** basado en **ESP32**, diseñado para **monitorear, registrar y visualizar eventos de un sensor táctil XS-123** en tiempo real.  
+El sistema integra:
 
-- **LCD 16x2 I2C** para visualización en tiempo real del estado del sensor.
-- **LED RGB** para indicar el estado del sensor visualmente.
-- **Buzzer** para señal acústica al detectar un toque.
-- **Almacenamiento en MicroSD** en formato JSON para registros diarios.
-- **Publicación MQTT** en tiempo real hacia un broker externo (`test.mosquitto.org`).
+- **LCD I2C 16x2** para mostrar el estado del sensor y la hora del evento.  
+- **LED RGB** para indicar visualmente el estado del sensor.  
+- **Buzzer** para señal acústica al detectar un toque.  
+- **MicroSD** para almacenar registros diarios en formato JSON.  
+- **MQTT** (opcional) para transmitir eventos en tiempo real a un broker externo (`test.mosquitto.org`).  
 
-El proyecto cumple con todos los objetivos académicos del trabajo del datalogger y puede simularse o probarse en entornos de laboratorio.
+El proyecto está pensado para **uso académico y simulación en Wokwi**, y sirve como base para sistemas de adquisición de datos en entornos inteligentes.
 
 ---
 
-## Objetivos
+## Objetivos del Proyecto
 
-- Registrar eventos de un sensor táctil en tiempo real.  
-- Indicar el estado del sensor mediante **LED RGB** y **buzzer**.  
-- Visualizar información en un **LCD** de manera clara y legible.  
-- Almacenar los registros en **tarjeta MicroSD** con formato JSON diario.  
-- Publicar eventos en un broker **MQTT** para monitoreo remoto.  
-- Gestionar tareas sin bloqueos usando **`millis()`** para temporización.  
+- Diseñar un sistema de adquisición de datos autónomo.  
+- Registrar eventos de un sensor táctil en **MicroSD** y MQTT.  
+- Visualizar de forma simultánea en **LCD**, **LED RGB** y **buzzer**.  
+- Implementar gestión de tareas **sin bloqueos** usando `millis()`.  
+- Mantener registros ordenados y en formato estandarizado **JSON** para análisis posterior.  
+- Permitir monitoreo remoto mediante MQTT.  
 
 ---
 
 ## Hardware Utilizado
 
-| Componente | Descripción | Pin/Conexión |
-|------------|------------|--------------|
-| ESP32 | Microcontrolador principal | - |
-| Sensor táctil XS-123 | Detector de eventos de toque | GPIO33 |
-| LED RGB | Indica visualmente el estado del sensor | Rojo: 32, Verde: 34, Azul: 35 |
-| Buzzer | Señal acústica al detectar toque | 14 |
-| LCD I2C 16x2 | Muestra estado del sensor | SDA: 21, SCL: 22 |
-| MicroSD | Almacenamiento de registros JSON | CS: 5 |
+| Componente | Función | Conexión |
+|------------|--------|----------|
+| ESP32 | Microcontrolador | - |
+| Sensor táctil XS-123 | Detecta eventos de toque | GPIO33 |
+| LED RGB | Indica estado del sensor | Rojo: 32, Verde: 34, Azul: 35 |
+| Buzzer | Señal acústica | 14 |
+| LCD I2C 16x2 | Visualización del estado | SDA: 21, SCL: 22 |
+| MicroSD | Almacenamiento de registros | CS: 5 |
 
 ---
 
 ## Software y Librerías
 
 - **IDE:** Arduino IDE  
-- **Lenguaje:** C++ para ESP32  
-- **Librerías utilizadas:**  
+- **Lenguaje:** C++  
+- **Librerías:**  
   - `WiFi.h`  
-  - `PubSubClient.h`  
+  - `PubSubClient.h` (MQTT opcional)  
   - `LiquidCrystal_I2C.h`  
   - `SD.h`  
   - `Wire.h`  
@@ -52,25 +53,103 @@ El proyecto cumple con todos los objetivos académicos del trabajo del datalogge
 
 ---
 
-## Funcionalidades
+## Lógica de Funcionamiento
 
-1. **Sensor táctil XS-123**  
-   - Detecta eventos de toque y envía el estado al sistema.  
+1. **Lectura del Sensor**
+   - El ESP32 detecta el estado del sensor táctil XS-123.  
+   - Se implementa **debounce** para evitar falsos positivos.  
+   - Solo se registran cambios de estado (Tocado → Libre o Libre → Tocado).
 
-2. **Buzzer y LED RGB**  
-   - **Buzzer:** Se activa cuando el sensor es tocado.  
-   - **LED RGB:** Rojo = tocado, Verde = libre.  
+2. **Control de Salidas**
+   - **LED RGB:**  
+     - Rojo = Sensor tocado  
+     - Verde = Sensor libre  
+   - **Buzzer:**  
+     - Activo cuando el sensor está tocado.
 
-3. **LCD**  
-   - Alterna la visualización entre estado del sensor y hora/fecha actual (RTC).  
+3. **Visualización en LCD**
+   - Primera línea: Estado del sensor (`Tocado`/`Libre`)  
+   - Segunda línea: Hora del evento proveniente del RTC  
 
-4. **MicroSD**  
-   - Guarda eventos de manera secuencial en archivos `<YYYY_MM_DD>.json`.  
-   - Formato de cada registro:
+4. **Almacenamiento en MicroSD**
+   - Archivo diario: `<YYYY_MM_DD>.json`  
+   - Registro JSON ejemplo:
    ```json
    {
-       "fecha":"DD/MM/YYYY",
-       "hora":"HH:MM:SS",
-       "sensor":"Tocado/Libre",
-       "buzzer":"Activado/Desactivado"
+       "fecha": "29/09/2025",
+       "hora": "14:35:05",
+       "sensor": "Tocado",
+       "buzzer": "Activado"
    }
+
+Publicación en MQTT
+
+Broker: test.mosquitto.org
+
+Tópico: 20217977_Andres_Arce
+
+Cada cambio de estado se publica como mensaje JSON.
+
+Reconexión automática si se pierde la conexión.
+
+Gestión de Tareas
+
+millis() se utiliza para alternar lectura del sensor y actualización de LCD.
+
+Evita el uso de delay() y permite ejecución paralela de tareas.
+
+
+[Sensor táctil XS-123] 
+        ↓
+   Lectura del estado
+        ↓
++--------------------+
+| Comparar con estado|
+| anterior (debounce)|
++--------------------+
+        ↓
+ Si hay cambio → Actualiza:
+        ↓
++--------------------+       +-----------------+
+| LED RGB            |       | Buzzer          |
+| (Rojo/Verde)       |       | (ON/OFF)        |
++--------------------+       +-----------------+
+        ↓
++--------------------+
+| LCD 16x2           |
+| Estado y hora      |
++--------------------+
+        ↓
++--------------------+
+| MicroSD            |
+| Guarda registro    |
++--------------------+
+        ↓
++--------------------+
+| MQTT (opcional)    |
+| Publica evento     |
++--------------------+
+
+Instrucciones de Uso
+
+Conectar el ESP32 y periféricos: LCD, LED RGB, Buzzer, Sensor y MicroSD.
+
+Abrir el código en Arduino IDE y cargarlo en el ESP32.
+
+Observar la salida en LCD y Serial Monitor.
+
+Revisar archivos .json en la MicroSD para consultar los registros diarios.
+
+(Opcional) Abrir MQTT Explorer y suscribirse al tópico 20217977_Andres_Arce para monitoreo remoto.
+
+Conclusión
+
+El proyecto cumple con todos los requisitos académicos del trabajo del datalogger:
+
+Lectura y registro de eventos de un sensor táctil real.
+
+Control de actuadores visuales y acústicos.
+
+Registro en SD y transmisión en MQTT.
+
+Tareas gestionadas de manera eficiente sin bloqueos.
