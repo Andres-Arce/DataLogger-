@@ -146,6 +146,5 @@ Evita el uso de delay() y permite ejecución paralela de tareas.
 
 ---
 
-r
 
 
