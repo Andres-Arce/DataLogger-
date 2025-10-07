@@ -3,31 +3,29 @@
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 #include "RTClib.h"
+#include <FS.h>
 #include <SD.h>
 
-// ---------- Configuración Wi-Fi ----------
-const char* ssid = "MEGACABLE-2.4G-ADAB";
-const char* password = "s2kU6cjveS";
+const char* ssid = "OPPO A60";
+const char* password = "arce1234";
 
-// ---------- Configuración MQTT ----------
 const char* mqtt_server = "test.mosquitto.org";
-const int mqtt_port = 1883;
-const char* mqtt_topic = "20217977_Andres_Arce";
+const int   mqtt_port   = 1883;
+const char* mqtt_topic  = "20217977_Andres_Arce";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// ---------- Configuración hardware ----------
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 RTC_DS1307 rtc;
 
-const int buzzerPin = 8;
+const int buzzerPin = 14;
 const int sensorPin = 33;
 
-// Pines LED RGB
-const int redPin = 5;
-const int greenPin = 6;
-const int bluePin = 7;
+// OJO: en ESP32 los pines 34 y 35 son de solo entrada
+const int redPin   = 32;
+const int greenPin = 25;   // cambia 35 -> 25 (salida)
+const int bluePin  = 26;   // cambia 34 -> 26 (salida)
 
 bool sensorState = false;
 bool lastSensorState = false; 
@@ -60,18 +58,34 @@ class Datalogger {
       lcd.backlight();
       Serial.println("RTC inicializado correctamente");
 
-      // Pines
       pinMode(sensorPin, INPUT);
       pinMode(buzzerPin, OUTPUT);
       pinMode(redPin, OUTPUT);
       pinMode(greenPin, OUTPUT);
       pinMode(bluePin, OUTPUT);
 
-      // SD
-      if (!SD.begin(5)) {
+      // --- SD (forzamos 10 MHz) ---
+      if (!SD.begin(5, SPI, 10000000)) {
         Serial.println("Error al inicializar la tarjeta SD");
       } else {
-        Serial.println("Tarjeta SD inicializada correctamente");
+        uint8_t cardType = SD.cardType();
+        Serial.print("SD OK. Tipo: ");
+        if (cardType == CARD_NONE) Serial.println("Ninguna");
+        else if (cardType == CARD_MMC) Serial.println("MMC");
+        else if (cardType == CARD_SD) Serial.println("SDSC");
+        else if (cardType == CARD_SDHC) Serial.println("SDHC/SDXC");
+        else Serial.println("Desconocida");
+
+        // Comprobar escritura básica
+        File test = SD.open("/_test.tst", FILE_WRITE);
+        if (!test) {
+          Serial.println("No se pudo crear archivo de prueba (¿bloqueo físico? ¿formato no FAT32?)");
+        } else {
+          test.println("ok");
+          test.close();
+          SD.remove("/_test.tst");
+          Serial.println("Prueba de escritura OK");
+        }
       }
 
       // Wi-Fi y MQTT
@@ -86,7 +100,7 @@ class Datalogger {
         delay(500);
         Serial.print(".");
       }
-      Serial.println("Conectado a Wi-Fi");
+      Serial.println(" Conectado a Wi-Fi");
     }
 
     void reconnectMQTT() {
@@ -139,47 +153,62 @@ class Datalogger {
       lcd.clear();
       lcd.setCursor(0,0);
       if (now.day() < 10) lcd.print("0");
-      lcd.print(now.day());
-      lcd.print("/");
+      lcd.print(now.day());  lcd.print("/");
       if (now.month() < 10) lcd.print("0");
-      lcd.print(now.month());
-      lcd.print("/");
+      lcd.print(now.month()); lcd.print("/");
       lcd.print(now.year());
 
       lcd.setCursor(0,1);
       if (now.hour() < 10) lcd.print("0");
-      lcd.print(now.hour());
-      lcd.print(":");
+      lcd.print(now.hour());  lcd.print(":");
       if (now.minute() < 10) lcd.print("0");
-      lcd.print(now.minute());
-      lcd.print(":");
+      lcd.print(now.minute()); lcd.print(":");
       if (now.second() < 10) lcd.print("0");
       lcd.print(now.second());
     }
 
     void setLEDColor(int red, int green, int blue) {
-      digitalWrite(redPin, red == 255 ? HIGH : LOW);
-      digitalWrite(greenPin, green == 255 ? HIGH : LOW);
-      digitalWrite(bluePin, blue == 255 ? HIGH : LOW);
+      digitalWrite(redPin,   red   ? HIGH : LOW);
+      digitalWrite(greenPin, green ? HIGH : LOW);
+      digitalWrite(bluePin,  blue  ? HIGH : LOW);
     }
 
+    // ---- AQUI el fix: nombre 8.3 y FILE_APPEND ----
     void storeData() {
       DateTime now = rtc.now();
-      String filename = String(now.year()) + "_" + String(now.month()) + "_" + String(now.day()) + ".json";
 
-      dataFile = SD.open(filename.c_str(), FILE_WRITE);
-      if (dataFile) {
-        dataFile.print("{");
-        dataFile.print("\"fecha\":\"" + String(now.day()) + "/" + String(now.month()) + "/" + String(now.year()) + "\",");
-        dataFile.print("\"hora\":\"" + String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + "\",");
-        dataFile.print("\"sensor\":\"" + String(sensorState ? "Tocado" : "Libre") + "\",");
-        dataFile.print("\"buzzer\":\"" + String(sensorState ? "Activado" : "Desactivado") + "\"");
-        dataFile.println("}");
-        dataFile.close();
-        Serial.println("Registro guardado en SD");
+      // nombre 8.3 -> /YYYYMMDD.jsn  (extensión de 3 letras)
+      char filename[20];
+      snprintf(filename, sizeof(filename), "/%04d%02d%02d.jsn",
+               now.year(), now.month(), now.day());
+
+      // Abrimos en append (crea si no existe)
+      File f = SD.open(filename, FILE_APPEND);
+      if (f) {
+        // cada línea un objeto JSON (NDJSON)
+        f.print("{");
+        f.print("\"fecha\":\"");  print2(f, now.day());  f.print("/"); print2(f, now.month()); f.print("/"); f.print(now.year()); f.print("\",");
+        f.print("\"hora\":\"");   print2(f, now.hour()); f.print(":");  print2(f, now.minute()); f.print(":"); print2(f, now.second()); f.print("\",");
+        f.print("\"sensor\":\""); f.print(sensorState ? "Tocado" : "Libre"); f.print("\",");
+        f.print("\"buzzer\":\""); f.print(sensorState ? "Activado" : "Desactivado"); f.print("\"");
+        f.println("}");
+        f.close();
+        Serial.printf("Registro guardado en SD: %s\n", filename);
       } else {
-        Serial.println("Error al abrir el archivo para escribir");
+        Serial.printf("Error al abrir el archivo para escribir: %s\n", filename);
+        // Diagnóstico extra:
+        if (!SD.begin(5, SPI, 10000000)) {
+          Serial.println("Además, SD dejó de responder al reinicializar.");
+        } else {
+          Serial.println("SD responde; el problema es nombre/ruta/permisos.");
+        }
       }
+    }
+
+    // helper para 2 dígitos
+    void print2(Print& out, int v) {
+      if (v < 10) out.print('0');
+      out.print(v);
     }
 
     void publishMQTT() {
@@ -189,9 +218,9 @@ class Datalogger {
       DateTime now = rtc.now();
       String payload = "{";
       payload += "\"fecha\":\"" + String(now.day()) + "/" + String(now.month()) + "/" + String(now.year()) + "\",";
-      payload += "\"hora\":\"" + String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + "\",";
-      payload += "\"sensor\":\"" + String(sensorState ? "Tocado" : "Libre") + "\",";
-      payload += "\"buzzer\":\"" + String(sensorState ? "Activado" : "Desactivado") + "\"";
+      payload += "\"hora\":\""  + String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + "\",";
+      payload += "\"sensor\":\""+ String(sensorState ? "Tocado" : "Libre") + "\",";
+      payload += "\"buzzer\":\""+ String(sensorState ? "Activado" : "Desactivado") + "\"";
       payload += "}";
 
       client.publish(mqtt_topic, payload.c_str());
